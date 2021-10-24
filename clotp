@@ -55,7 +55,7 @@ Mode:
 
   -i - Initializes environment
   -n - Adds a new service
-  -g - Generates OTP for service
+  -g - Generates OTP for service (default)
   -h - Shows this help
   -v - shows version ans exits
 
@@ -201,6 +201,12 @@ if [ ${add} -eq 1 ]
 then
   add ${*}
   exit 0
+fi
+
+if [ "$BASH_ARGC" -gt 0 ]
+then
+  # Assume generate
+  generate=1
 fi
 
 if [ ${generate} -eq 1 ]
