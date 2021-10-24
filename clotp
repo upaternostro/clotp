@@ -1,0 +1,260 @@
+#!/bin/sh
+PGNAME=clotp
+VERSION=0.1
+GPG="/usr/bin/gpg2"
+OATHTOOL="/usr/bin/oathtool"
+XCLIP="/usr/bin/xclip"
+confdir="${HOME}/.${PGNAME}"
+kid=
+uid=
+digits=6
+timestepsize="30s"
+algorithm="SHA1"
+digitsparampresent=0
+timestepsizeparampresent=0
+algorithmparampresent=0
+clip=0
+
+function splash {
+  cat << SPLASH
+                                                           .    .   .. ..@
+                                                          ... *.&*@/@&%&#
+                CLOTP - Command Line OTP generator      .... (@&&@&,#%&%@%%
+                                                      ...&@@&&%&&%%#%%##*#%%.
+                                                      ,&#&&&%&&&%%%,##.%#%#.
+                                                  ...*&#&&&&&&&%%%%(,,/#*#%((%.
+                       ..   ..@@@@@@%          . ..,@&&&&&&&&&%%%%%(/    *//.,(
+             .../&&&@#..@&&&&&&&&&&&&&&&&@&&&&&&&@&&&&&&&&&%&%%%%##/.     .. .
+           %&%&&%%%##/%&&&&&&&&&&&%%&%&&&&&&&&&&%&&&&&&&&&&%%%&%%#(*.
+        .&%#*#(((#((( %%&&&&&%&&&&&%%%%%&&&&&&&%%%%%%%&%&%&&%&&&%#/,
+       .&#((***/*/****###%&%%%%#%###%%%%&&%%%%%%%%%%%%%%%%%%%%&%%##%.
+     .&%%#(#///////****//(#%%%%%%%%/(#%%%%%%%%%%%%%###%%&%%%%%%#((#(.
+  .#/#%%#(((%#**(/#(..   .(//((/(/( .,**///#########(*#%%%%%#(//(/, .
+ ./#%%%#((/*./*.%,..     ,. ,/((((*    ,,,*******///*,,#((%#%&&,(((#% .
+  ./((#//     ,.*.        *.../((/,                     ..*(%##&&(,/*##&.
+   .#*.       ,.,         ,. ,/(//                           .. /%%* .,/(.
+    ..                       &*/*/#                          .. %#*   ./*,
+                             /((*,.,/(.                      .#%/      .(#.
+                               *,*  ..//**.               .*(*/,    .,../,
+                               .**/   ..(**                           .  ,
+                                ,*#(.   .
+                                   .,**
+SPLASH
+}
+
+function help {
+  cat << HELP
+
+CLOTP - Command Line OTP generator - Version ${VERSION}
+
+Usage:
+
+  ${PGNAME} [-i|-n|-g|-h|-v] [options] [service]
+
+Mode:
+
+  -i - Initializes environment
+  -n - Adds a new service
+  -g - Generates OTP for service
+  -h - Shows this help
+  -v - shows version ans exits
+
+Common options:
+
+  -c path - config directory (defaults to \${HOME}/.${PGNAME})
+
+  -k id - key ID for encryption
+  -u user - user ID for encryption
+
+  -d digits - number of digits
+  -s time - time-step duration
+  -a algorithm - TOTP variant: SHA1, SHA256 or SHA512
+
+  -p - enable clipboard integration (requires xclip)
+
+HELP
+}
+
+function urldecode {
+  local url_encoded="${1//+/ }"
+  printf "%b" "${url_encoded//%/\\x}"
+}
+
+function init {
+  test -d "${confdir}" || mkdir "${confdir}"
+}
+
+function add {
+  svc=$1
+  test -z "${svc}" && echo "${PGNAME}: missing service name" && return 1
+  test -d "${confdir}/${svc}" && echo "${PGNAME}: ${svc} already exists in ${confdir}" && return 1
+  mkdir -p "${confdir}/${svc}"
+  echo -n "Please enter secret key: "
+  read
+  umask 0066
+  cat > "${confdir}/${svc}/key" << KEY
+${REPLY}
+KEY
+  ${GPG} -u "${kid}" -r "${uid}" --encrypt "${confdir}/${svc}/key"
+  rm "${confdir}/${svc}/key" 
+  test "${digitsparampresent}" -eq 1 && echo "digits=${digits}" >> "${confdir}/${svc}/${PGNAME}.conf"
+  test "${timestepsizeparampresent}" -eq 1 && echo "timestepsize=${timestepsize}" >> "${confdir}/${svc}/${PGNAME}.conf"
+  test "${algorithmparampresent}" -eq 1 && echo "algorithm=${algorithm}" >> "${confdir}/${svc}/${PGNAME}.conf"
+}
+
+function generate {
+  svc=$1
+  test -z "${svc}" && echo "${PGNAME}: missing service name" && return 1
+  test -d "${confdir}/${svc}" || ( echo "${PGNAME}: ${svc} does not exist in ${confdir}" && return 1 )
+  test -f "${confdir}/${svc}/key.gpg" || ( echo "${PGNAME}: key.gpg does not exist in ${confdir}/${svc}" && return 1 )
+  # Source config if any
+  test -f "${confdir}/${svc}/${PGNAME}.conf" && . "${confdir}/${svc}/${PGNAME}.conf"
+  otp=`"${GPG}" -o - --quiet --decrypt "${confdir}/${svc}/key.gpg" | "${OATHTOOL}" -b -d "${digits}" -s "${timestepsize}" --totp=${algorithm} -`
+  if [ ${clip} -eq 1 -a -x "${XCLIP}" ]
+  then
+    echo -n "${otp}" | "${XCLIP}" -sel clip
+  fi
+  echo "${otp}"
+}
+
+function ask_service {
+  echo -n "Please enter service name: "
+  read
+  SVC="${REPLY}"
+}
+
+# Parse options
+init=0
+add=0
+generate=0
+help=0
+while getopts inghc:k:u:d:pa:v OPT
+do
+  case "${OPT}"
+  in
+    (i)
+      init=1
+      ;;
+    (n)
+      add=1
+      ;;
+    (g)
+      generate=1
+      ;;
+    (h)
+      help
+      exit 1
+      ;;
+    (c)
+      confdir="${OPTARG}"
+      ;;
+    (k)
+      kid="${OPTARG}"
+      ;;
+    (u)
+      uid="${OPTARG}"
+      ;;
+    (d)
+      digits="${OPTARG}"
+      digitsparampresent=1
+      ;;
+    (s)
+      timestepsize="${OPTARG}"
+      timestepsizeparampresent=1
+      ;;
+    (p)
+      test -x "${XCLIP}" || echo "${PGNAME}: warning: xclip not available, clipboard integration disabled"
+      clip=1
+      ;;
+    (a)
+      algorithm="${OPTARG}"
+      algorithmparampresent=1
+      ;;
+    (v)
+      echo "${PGNAME} version ${VERSION}"
+      exit 0
+      ;;
+    (*)
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND-1))
+
+# Warning: -h never gets here!
+if [ $(( ${init} + ${add} + ${generate} )) -gt 1 ]
+then
+  echo "You must choose just one between -i, -n and -g. See ${PGNAME} -h for help."
+  exit 1
+fi
+
+# Source config if any
+test -f "${confdir}/${PGNAME}.conf" && . "${confdir}/${PGNAME}.conf"
+
+if [ ${init} -eq 1 ]
+then
+  init
+  exit 0
+fi
+
+if [ ${add} -eq 1 ]
+then
+  add ${*}
+  exit 0
+fi
+
+if [ ${generate} -eq 1 ]
+then
+  generate ${*}
+  exit 0
+fi
+
+# We arrive here only if no options were specified
+splash
+echo
+echo -n "Press enter to start: "
+read
+
+while true
+do
+  clear
+  echo
+  echo "CLOTP v${VERSION} - Main menù"
+  echo
+  echo "i) init CLOTP environment"
+  echo "n) setup OTP key"
+  echo "g) generate OTP"
+  echo
+  echo "q) quit"
+  echo
+  echo -n "Enter your choice: "
+  read
+
+  case "${REPLY}"
+  in
+    (i)
+      init
+      ;;
+    (n)
+      ask_service
+      echo
+      add "${SVC}"
+      echo
+      echo -n "Press enter continue "
+      read
+      ;;
+    (g)
+      ask_service
+      echo
+      generate "${SVC}"
+      echo
+      echo -n "Press enter continue "
+      read
+      ;;
+    (q)
+      exit 0
+      ;;
+    (*)
+      ;;
+  esac
+done
