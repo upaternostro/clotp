@@ -1,9 +1,11 @@
 #!/bin/sh
-PGNAME=clotp
-VERSION=0.1
-GPG="/usr/bin/gpg2"
-OATHTOOL="/usr/bin/oathtool"
-XCLIP="/usr/bin/xclip"
+#
+readonly PGNAME="clotp"
+readonly VERSION="0.1"
+readonly GPG="/usr/bin/gpg2"
+readonly OATHTOOL="/usr/bin/oathtool"
+readonly XCLIP="/usr/bin/xclip"
+#
 confdir="${HOME}/.${PGNAME}"
 kid=
 uid=
