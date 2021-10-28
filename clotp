@@ -55,7 +55,7 @@ Usage:
 
 Mode:
 
-  -i - Initializes environment
+  -i - Import OTP URL
   -n - Adds a new service
   -g - Generates OTP for service (default)
   -h - Shows this help
@@ -77,19 +77,58 @@ Common options:
 HELP
 }
 
-function urldecode {
-  local url_encoded="${1//+/ }"
-  printf "%b" "${url_encoded//%/\\x}"
+# Inspired by https://stackoverflow.com/a/45977232 and https://stackoverflow.com/a/63993578
+readonly URI_REGEX='^otpauth://([th]otp)/((([^:]*):)|((.*)%3A))?([^?]*)\?((%20)*)(&?secret=([^&]*)|&?algorithm=([^&]*)|&?digits=([^&]*)|&?counter=([^&]*)|&?period=([^&]*))*$'
+#                              ^         ^^^         ^^         ^        ^^      ^         ^                   ^                ^                 ^                ^
+#                              1 type    ||4 issuer  |6 issuer  7 user   |9 %20  10 "or"   11 secret           12 algorithm     13 digits         14 counter       15 period
+#                                        |3 issuer:  5 issuer%3A         8 %20%20...
+#                                        2 issuer: or issuer%3A
+
+function parse_url {
+  [[ "$@" =~ ${URI_REGEX} ]] && {
+    URL_TYPE="${BASH_REMATCH[1]}"
+    URL_ISSUER="${BASH_REMATCH[4]}"
+    test -z "${BASH_REMATCH[6]}" || URL_ISSUER="${BASH_REMATCH[6]}"
+    URL_USER="${BASH_REMATCH[7]}"
+    URL_SECRET="${BASH_REMATCH[11]}"
+    URL_ALGORITHM="${BASH_REMATCH[12]}"
+    URL_DIGITS="${BASH_REMATCH[13]}"
+    URL_COUNTER="${BASH_REMATCH[14]}"
+    URL_PERIOD="${BASH_REMATCH[15]}"
+  }
+  return $?
 }
 
 function init {
   test -d "${confdir}" || mkdir "${confdir}"
 }
 
+function import {
+  echo -n "Please enter OTP URL: "
+  read
+  parse_url "${REPLY}"
+  [ $? -ne 0 ] && return 1
+  init
+  svc="${URL_ISSUER}/${URL_USER}"
+  test -z "${URL_ISSUER}" && svc="${URL_USER}"
+  test -d "${confdir}/${svc}" && echo "${PGNAME}: ${svc} already exists in ${confdir}" && return 1
+  mkdir -p "${confdir}/${svc}"
+  umask 0066
+  cat > "${confdir}/${svc}/key" << KEY
+${URL_SECRET}
+KEY
+  ${GPG} -u "${kid}" -r "${uid}" --encrypt "${confdir}/${svc}/key"
+  rm "${confdir}/${svc}/key" 
+  test -z "${URL_DIGITS}" || echo "digits=${URL_DIGITS}" >> "${confdir}/${svc}/${PGNAME}.conf"
+  test -z "${URL_PERIOD}" || echo "timestepsize=${URL_PERIOD}" >> "${confdir}/${svc}/${PGNAME}.conf"
+  test -z "${URL_ALGORITHM}" || echo "algorithm=${URL_ALGORITHM}" >> "${confdir}/${svc}/${PGNAME}.conf"
+}
+
 function add {
   svc=$1
   test -z "${svc}" && echo "${PGNAME}: missing service name" && return 1
   test -d "${confdir}/${svc}" && echo "${PGNAME}: ${svc} already exists in ${confdir}" && return 1
+  init
   mkdir -p "${confdir}/${svc}"
   echo -n "Please enter secret key: "
   read
@@ -107,6 +146,7 @@ KEY
 function generate {
   svc=$1
   test -z "${svc}" && echo "${PGNAME}: missing service name" && return 1
+  init
   test -d "${confdir}/${svc}" || ( echo "${PGNAME}: ${svc} does not exist in ${confdir}" && return 1 )
   test -f "${confdir}/${svc}/key.gpg" || ( echo "${PGNAME}: key.gpg does not exist in ${confdir}/${svc}" && return 1 )
   # Source config if any
@@ -126,7 +166,7 @@ function ask_service {
 }
 
 # Parse options
-init=0
+import=0
 add=0
 generate=0
 help=0
@@ -135,7 +175,7 @@ do
   case "${OPT}"
   in
     (i)
-      init=1
+      import=1
       ;;
     (n)
       add=1
@@ -184,7 +224,7 @@ done
 shift $((OPTIND-1))
 
 # Warning: -h never gets here!
-if [ $(( ${init} + ${add} + ${generate} )) -gt 1 ]
+if [ $(( ${import} + ${add} + ${generate} )) -gt 1 ]
 then
   echo "You must choose just one between -i, -n and -g. See ${PGNAME} -h for help."
   exit 1
@@ -193,9 +233,9 @@ fi
 # Source config if any
 test -f "${confdir}/${PGNAME}.conf" && . "${confdir}/${PGNAME}.conf"
 
-if [ ${init} -eq 1 ]
+if [ ${import} -eq 1 ]
 then
-  init
+  import
   exit 0
 fi
 
@@ -229,7 +269,7 @@ do
   echo
   echo "CLOTP v${VERSION} - Main menù"
   echo
-  echo "i) init CLOTP environment"
+  echo "i) import OTP URL"
   echo "n) setup OTP key"
   echo "g) generate OTP"
   echo
@@ -241,7 +281,7 @@ do
   case "${REPLY}"
   in
     (i)
-      init
+      import
       ;;
     (n)
       ask_service
