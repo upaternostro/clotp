@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 readonly PGNAME="clotp"
-readonly VERSION="0.1"
+readonly VERSION="0.2"
 readonly GPG="/usr/bin/gpg2"
 readonly OATHTOOL="/usr/bin/oathtool"
 readonly XCLIP="/usr/bin/xclip"
