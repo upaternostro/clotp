@@ -120,7 +120,7 @@ KEY
   ${GPG} -u "${kid}" -r "${uid}" --encrypt "${confdir}/${svc}/key"
   rm "${confdir}/${svc}/key" 
   test -z "${URL_DIGITS}" || echo "digits=${URL_DIGITS}" >> "${confdir}/${svc}/${PGNAME}.conf"
-  test -z "${URL_PERIOD}" || echo "timestepsize=${URL_PERIOD}" >> "${confdir}/${svc}/${PGNAME}.conf"
+  test -z "${URL_PERIOD}" || echo "timestepsize=${URL_PERIOD}s" >> "${confdir}/${svc}/${PGNAME}.conf"
   test -z "${URL_ALGORITHM}" || echo "algorithm=${URL_ALGORITHM}" >> "${confdir}/${svc}/${PGNAME}.conf"
 }
 
