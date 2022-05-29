@@ -59,7 +59,7 @@ Mode:
   -n - Adds a new service
   -g - Generates OTP for service (default)
   -h - Shows this help
-  -v - shows version ans exits
+  -v - shows version and exits
 
 Common options:
 
