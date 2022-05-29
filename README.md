@@ -48,23 +48,25 @@ At first I thought to call it `shotp`, emphasizing the shell environment, but la
 
 CLOTP uses `oathtool` to generate OTP, `gpg2` to keep secrets, well, secret and `xclip` to integrate with system clipboard, the latter being optional.
 
+Since v0.3, CLOTP can generate and show QR codes, using `qrencode` and `display`, the latter from ImageMagick package.
+
 ### Fedora
 
-`sudo dnf install oathtool gpg2 xclip`
+`sudo dnf install oathtool gpg2 xclip qrencode imagemagick`
 
 ### CentOS/RHEL
 
 Enable EPEL and esecute:
 
-`sudo yum install oathtool gnupg2 xclip`
+`sudo yum install oathtool gnupg2 xclip qrencode imagemagick`
 
 ### Debian/Ubuntu
 
-`sudo apt install oathtool gnupg2 xclip`
+`sudo apt install oathtool gnupg2 xclip qrencode imagemagick`
 
 ### SUSE/OpenSUSE
 
-`sudo zypper in oath-toolkit gpg2 xclip`
+`sudo zypper in oath-toolkit gpg2 xclip qrencode imagemagick`
 
 ## Installation
 
@@ -132,6 +134,14 @@ or even
 `clotp <servicename>`
 
 where `<servicename>` is an existing service. In both cases, you'll be asked for the GPG private key password to decrypt secret.
+
+### Generating a QR code for a service
+
+Use
+
+`clotp -q <servicename>`
+
+to open a window showing the QR code image. Please note that CLOTP hangs until the window is closed.
 
 ### Configuration
 

@@ -5,6 +5,8 @@ readonly VERSION="0.2"
 readonly GPG="/usr/bin/gpg2"
 readonly OATHTOOL="/usr/bin/oathtool"
 readonly XCLIP="/usr/bin/xclip"
+readonly QRENCODE="/usr/bin/qrencode"
+readonly DISPLAYIMG="/usr/bin/display"
 #
 confdir="${HOME}/.${PGNAME}"
 kid=
@@ -51,13 +53,14 @@ CLOTP - Command Line OTP generator - Version ${VERSION}
 
 Usage:
 
-  ${PGNAME} [-i|-n|-g|-h|-v] [options] [service]
+  ${PGNAME} [-i|-n|-g|-q|-h|-v] [options] [service]
 
 Mode:
 
   -i - Import OTP URL
   -n - Adds a new service
   -g - Generates OTP for service (default)
+  -q - Show service QR code
   -h - Shows this help
   -v - shows version and exits
 
@@ -159,6 +162,18 @@ function generate {
   echo "${otp}"
 }
 
+function qr {
+  svc=$1
+  test -z "${svc}" && echo "${PGNAME}: missing service name" && return 1
+  init
+  test -d "${confdir}/${svc}" || ( echo "${PGNAME}: ${svc} does not exist in ${confdir}" && return 1 )
+  test -f "${confdir}/${svc}/key.gpg" || ( echo "${PGNAME}: key.gpg does not exist in ${confdir}/${svc}" && return 1 )
+  # Source config if any
+  test -f "${confdir}/${svc}/${PGNAME}.conf" && . "${confdir}/${svc}/${PGNAME}.conf"
+  esvc="${svc/\//%3A}"
+  ${QRENCODE} -l H -o - "otpauth://totp/${esvc/@/%40}?secret=$("${GPG}" -o - --quiet --decrypt "${confdir}/${svc}/key.gpg")&algorithm=${algorithm}&digits=${digits}&period=${timestepsize/s/}" | ${DISPLAYIMG} -
+}
+
 function ask_service {
   echo -n "Please enter service name: "
   read
@@ -169,8 +184,9 @@ function ask_service {
 import=0
 add=0
 generate=0
+qr=0
 help=0
-while getopts inghc:k:u:d:pa:v OPT
+while getopts ingqhc:k:u:d:pa:v OPT
 do
   case "${OPT}"
   in
@@ -182,6 +198,9 @@ do
       ;;
     (g)
       generate=1
+      ;;
+    (q)
+      qr=1
       ;;
     (h)
       help
@@ -224,9 +243,9 @@ done
 shift $((OPTIND-1))
 
 # Warning: -h never gets here!
-if [ $(( ${import} + ${add} + ${generate} )) -gt 1 ]
+if [ $(( ${import} + ${add} + ${generate} + ${qr} )) -gt 1 ]
 then
-  echo "You must choose just one between -i, -n and -g. See ${PGNAME} -h for help."
+  echo "You must choose just one between -i, -n, -g and -q. See ${PGNAME} -h for help."
   exit 1
 fi
 
@@ -242,6 +261,12 @@ fi
 if [ ${add} -eq 1 ]
 then
   add ${*}
+  exit 0
+fi
+
+if [ ${qr} -eq 1 ]
+then
+  qr ${*}
   exit 0
 fi
 
